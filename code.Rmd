@@ -1,0 +1,657 @@
+---
+title: "Code for 'AI as a Partner in Psychological Assessment: Generating Situational Judgment Tests with Large Language Models'"
+output: html_document
+date: "2024-05-24"
+---
+
+```{r scenarios}
+
+library(openxlsx)
+library(dplyr)
+library(textTinyR)
+library(plotly)
+library(ggplot2)
+library(gridExtra)
+library(lavaan)
+library(psych)
+library(Hmisc)
+library(tidyr)
+
+#-------ICC-------
+
+autenticity_ICC<-read.xlsx('data.xlsx',sheet='autenticity_ICC')
+
+psych::ICC(autenticity_ICC[,c("expert1","expert2","expert3","expert4","expert5","expert6","expert7","expert8","expert9")]) # 0.70
+
+typicality_ICC<-read.xlsx('data.xlsx',sheet='typicality_ICC')
+
+psych::ICC(typicality_ICC[,c("expert1","expert2","expert3","expert4","expert5","expert6","expert7","expert8","expert9")]) # 0.85
+
+
+#-------compare 3 tests-------
+
+data<-read.xlsx('data.xlsx',sheet='scenario')
+
+result1 <- data %>%
+  group_by(group) %>%
+  summarise(
+    Mean = mean(Authenticity, na.rm = TRUE), 
+    SD = sd(Authenticity, na.rm = TRUE),     
+    Max = max(Authenticity, na.rm = TRUE),   
+    Min = min(Authenticity, na.rm = TRUE)   
+  )
+
+result2 <- data %>%
+  group_by(group) %>%
+  summarise(
+    Mean = mean(Typicality, na.rm = TRUE), 
+    SD = sd(Typicality, na.rm = TRUE),     
+    Max = max(Typicality, na.rm = TRUE),    
+    Min = min(Typicality, na.rm = TRUE)    
+  )
+
+Authenticity <- ggplot(data, aes(x = Authenticity, fill = group)) + 
+  geom_density(alpha = 0.5, adjust = 1) + 
+  scale_fill_manual(values = c("original" = "#00CED1", "new" = "#EE82EE", "adapted" ="#4169E1"), 
+                    limits = c("original", "new", "adapted")) + 
+  scale_y_continuous(limits = c(0, 1), breaks = seq(0, 1, by = 0.2)) +  
+  scale_x_continuous(limits = c(1.7, 5), breaks = seq(2, 5, by = 0.5)) +
+  theme_minimal() +
+  theme(
+    legend.title = element_blank(),
+    panel.grid = element_blank()  
+  )
+
+
+Typicality <- ggplot(data, aes(x = Typicality, fill = group)) + 
+  geom_density(alpha = 0.5, adjust = 1) +  
+  scale_fill_manual(values = c("original" = "#00CED1", "new" = "#EE82EE", "adapted" ="#4169E1"), 
+                    limits = c("original", "new", "adapted")) +  
+  scale_y_continuous(limits = c(0, 1), breaks = seq(0, 1, by = 0.2)) +  
+  scale_x_continuous(limits = c(1.7, 5), breaks = seq(2, 5, by = 0.5)) +
+  theme_minimal() +
+  theme(
+    legend.title = element_blank(),
+    panel.grid = element_blank()  
+  )
+
+
+#-------change in rounds-------
+
+data<-read.xlsx('data.xlsx',sheet = 'scenario')
+
+data_summary1 <- data %>%
+  filter(round != "none") %>%  
+  group_by(round, group) %>%
+  summarise(
+    median = median(Authenticity , na.rm = TRUE), 
+    min = min(Authenticity , na.rm = TRUE),    
+    max = max(Authenticity , na.rm = TRUE),  
+    .groups = 'drop'  
+  )
+
+p1 <- ggplot(data_summary1, aes(x = round, y = median, group = group, color = group)) +
+  geom_line(linewidth = 1.5) +  
+  geom_ribbon(aes(ymin = min, ymax = max, fill = group), color = NA, alpha = 0.2) +  
+  geom_point(size = 2) +
+  scale_color_manual(values = c("new" = "#EE82EE", "adapted" = "#4169E1"), limits = c("new", "adapted")) +
+  scale_fill_manual(values = c("new" = "#EE82EE", "adapted" = "#4169E1"), limits = c("new", "adapted")) +  
+  theme_minimal() +
+  scale_y_continuous(limits = c(1, 5)) +
+  labs(y = "Authenticity") +  
+  theme(
+    axis.text.x = element_text(size = 10),  
+    axis.text.y = element_text(size = 10)    
+  )
+
+
+
+data_summary2 <- data %>%
+  filter(round != "none") %>%  
+  group_by(round, group) %>%
+  summarise(
+    median = median(Typicality , na.rm = TRUE),  
+    min = min(Typicality , na.rm = TRUE),   
+    max = max(Typicality , na.rm = TRUE),  
+    .groups = 'drop' 
+  )
+
+p2 <- ggplot(data_summary2, aes(x = round, y = median, group = group, color = group)) +
+  geom_line(linewidth = 1.5) +  
+  geom_ribbon(aes(ymin = min, ymax = max, fill = group), color = NA, alpha = 0.2) + 
+  geom_point(size=2) +
+  scale_color_manual(values = c("new" = "#EE82EE", "adapted" = "#4169E1"),limits = c("new", "adapted")) +
+  scale_fill_manual(values = c("new" = "#EE82EE", "adapted" = "#4169E1"),limits = c("new", "adapted")) +  
+  theme_minimal()+
+  scale_y_continuous(limits = c(1, 5))+
+  labs(y = "Typicality") +  #
+  theme(
+    axis.text.x = element_text(size = 10),  
+    axis.text.y = element_text(size = 10) 
+  )
+
+
+#-------diversity-----
+
+data<-read.xlsx('data.xlsx',sheet='diversity_ICC')
+
+psych::ICC(data[,c("expert1","expert2","expert3","expert4","expert5","expert6","expert7")]) #0.80
+
+```
+
+
+```{r options}
+
+optiondata<-read.xlsx('data.xlsx',sheet='opt_ICC')
+
+item1 <- subset(optiondata, itemID == "item1")
+psych::ICC(item1[,c("expert1","expert2","expert3","expert4","expert5","expert6","expert7","expert8","expert9")]) #0.98
+
+item2 <- subset(optiondata, itemID == "item2")
+psych::ICC(item2[,c("expert1","expert2","expert3","expert4","expert5","expert6","expert7","expert8","expert9")]) #0.97
+
+item3 <- optiondata[31:45,]
+psych::ICC(item3[,c("expert1","expert2","expert3","expert4","expert5","expert6","expert7","expert8","expert9")]) #0.97
+
+item4 <- optiondata[46:50,]
+psych::ICC(item4[,c("expert1","expert2","expert3","expert4","expert5","expert6","expert7","expert8","expert9")]) #0.72
+
+item5 <- optiondata[51:65,]
+psych::ICC(item5[,c("expert1","expert2","expert3","expert4","expert5","expert6","expert7","expert8","expert9")]) #0.98
+
+item6 <- optiondata[66:80,]
+psych::ICC(item6[,c("expert1","expert2","expert3","expert4","expert5","expert6","expert7","expert8","expert9")]) #0.98
+
+item7 <- optiondata[81:95,]
+psych::ICC(item7[,c("expert1","expert2","expert3","expert4","expert5","expert6","expert7","expert8","expert9")]) #0.98
+
+item8 <- optiondata[96:100,]
+psych::ICC(item8[,c("expert1","expert2","expert3","expert4","expert5","expert6","expert7","expert8","expert9")]) #0.89
+
+item9 <- optiondata[101:115,]
+psych::ICC(item9[,c("expert1","expert2","expert3","expert4","expert5","expert6","expert7","expert8","expert9")]) #0.98
+
+item10 <- optiondata[116:130,]
+psych::ICC(item10[,c("expert1","expert2","expert3","expert4","expert5","expert6","expert7","expert8","expert9")]) #0.97
+
+item11 <- optiondata[131:145,]
+psych::ICC(item11[,c("expert1","expert2","expert3","expert4","expert5","expert6","expert7","expert8","expert9")]) #0.98
+
+item12 <- optiondata[146:150,]
+psych::ICC(item12[,c("expert1","expert2","expert3","expert4","expert5","expert6","expert7","expert8","expert9")]) #0.78
+
+item13 <- optiondata[151:165,]
+psych::ICC(item13[,c("expert1","expert2","expert3","expert4","expert5","expert6","expert7","expert8","expert9")]) #0.98
+
+item14 <- optiondata[166:170,]
+psych::ICC(item14[,c("expert1","expert2","expert3","expert4","expert5","expert6","expert7","expert8","expert9")]) #0.92
+
+item15 <- optiondata[171:185,]
+psych::ICC(item14[,c("expert1","expert2","expert3","expert4","expert5","expert6","expert7","expert8","expert9")]) #0.92
+
+item16 <- optiondata[186:200,]
+psych::ICC(item16[,c("expert1","expert2","expert3","expert4","expert5","expert6","expert7","expert8","expert9")]) #0.97
+
+item17 <- optiondata[201:215,]
+psych::ICC(item17[,c("expert1","expert2","expert3","expert4","expert5","expert6","expert7","expert8","expert9")]) #0.99
+
+item18 <- optiondata[216:230,]
+psych::ICC(item18[,c("expert1","expert2","expert3","expert4","expert5","expert6","expert7","expert8","expert9")]) #0.98
+
+  
+P_values <- numeric(18)  
+
+for (i in 1:18) {
+  item <- subset(optiondata, itemID == paste0("item", i))
+  item <- item[order(item$score), ]
+  item$expert <- c(2,2,2,2,2,1,1,1,1,1,0,0,0,0,0)
+  
+  item <- item[order(-item$LLM), ]
+  
+  item_P1 <- item[1:5, c("expert")]
+  num_ones <- sum(item_P1 == 2)
+  prob1 <- choose(num_ones, 1) / choose(5, 1)
+  
+  item_P2 <- item[6:10, c("expert")]
+  num_ones <- sum(item_P2 == 1)
+  prob2 <- choose(num_ones, 2) / choose(5, 2)
+  
+  item_P3 <- item[11:15, c("expert")]
+  num_ones <- sum(item_P3 == 0)
+  prob3 <- choose(num_ones, 1) / choose(5, 1)
+  
+  P <- prob1 * prob2 * prob3
+  P_values[i] <- P
+}
+
+P_values  
+
+# 2 points
+P_values <- numeric(18)  # Vector to store P values for each item
+
+for (i in 1:18) {
+  item <- subset(optiondata, itemID == paste0("item", i))
+  item <- item[order(item$score), ]
+  item$expert <- c(2,2,2,2,2,1,1,1,1,1,0,0,0,0,0)
+  
+  item <- item[order(-item$LLM), ]
+  
+  item_P1 <- item[1:5, c("expert")]
+  num_ones <- sum(item_P1 == 2)
+  prob1 <- choose(num_ones, 1) / choose(5, 1)
+  
+  P_values[i] <- prob1
+}
+
+P_values  
+
+# 1 point 
+P_values <- numeric(18)  # Vector to store P values for each item
+
+for (i in 1:18) {
+  item <- subset(optiondata, itemID == paste0("item", i))
+  item <- item[order(item$score), ]
+  item$expert <- c(2,2,2,2,2,1,1,1,1,1,0,0,0,0,0)
+  
+  item <- item[order(-item$LLM), ]
+  
+  item_P2 <- item[6:10, c("expert")]
+  num_ones <- sum(item_P2 == 1)
+  prob2 <- choose(num_ones, 2) / choose(5, 2)
+  
+  P_values[i] <- prob2
+}
+
+P_values 
+
+# 0 point
+P_values <- numeric(18)  # Vector to store P values for each item
+
+for (i in 1:18) {
+  item <- subset(optiondata, itemID == paste0("item", i))
+  item <- item[order(item$score), ]
+  item$expert <- c(2,2,2,2,2,1,1,1,1,1,0,0,0,0,0)
+  
+  item <- item[order(-item$LLM), ]
+  
+  item_P3 <- item[11:15, c("expert")]
+  num_ones <- sum(item_P3 == 0)
+  prob3 <- choose(num_ones, 1) / choose(5, 1)
+  
+  P_values[i] <- prob3
+}
+
+P_values 
+
+
+```
+
+```{r adapted options}
+
+data<-read.xlsx('data.xlsx',sheet='item_ICC')
+
+psych::ICC(data[,c("expert1","expert2","expert3","expert4","expert5","expert6","expert7","expert8","expert9")]) #0.96 
+
+data$question <- (seq_len(nrow(data)) - 1) %/% 4 + 1
+
+results <- data %>%
+  group_by(question) %>%
+  summarise(
+    Max = round(max(score, na.rm = TRUE),2),
+    Min = round(min(score, na.rm = TRUE),2),
+    Mean = round(mean(score, na.rm = TRUE),2),
+    SD = round(sd(score, na.rm = TRUE),2)
+  )
+
+results$question <- c('original 1','original 2','original 3','original 4','original 5','original 6','adapted 1','adapted 2','adapted 3','adapted 4','adapted 5','adapted 6','adapted 7','adapted 8','adapted 9','adapted 10','adapted 11','adapted 12','adapted 13','adapted 14','adapted 15','adapted 16','adapted 17','adapted 18')
+
+results$group <- c('original','original','original','original','original','original','adapted','adapted','adapted','adapted','adapted','adapted','adapted','adapted','adapted','adapted','adapted','adapted','adapted','adapted','adapted','adapted','adapted','adapted')
+
+View(results)
+
+#SD
+p_sd <- ggplot(results, aes(x = SD, fill = group)) + 
+  geom_density(alpha = 0.5, adjust = 1) + 
+  scale_fill_manual(values = c("original" = "#00CED1", "adapted" ="#4169E1")) +
+  theme_minimal() +
+  theme(legend.title = element_blank())+
+  guides(fill = "none")
+
+
+#min
+p_min <- ggplot(results, aes(x = Min, fill = group)) + 
+  geom_density(alpha = 0.5, adjust = 1) + 
+  scale_fill_manual(values = c("original" = "#00CED1", "adapted" ="#4169E1")) +
+  theme_minimal() +
+  theme(legend.title = element_blank())+
+  guides(fill = "none")
+
+#max
+p_max <-ggplot(results, aes(x = Max, fill = group)) + 
+  geom_density(alpha = 0.5, adjust = 1) + 
+  scale_fill_manual(values = c("original" = "#00CED1", "adapted" ="#4169E1")) +
+  theme_minimal() +
+  theme(legend.title = element_blank())+
+  guides(fill = "none")
+
+#mean
+p_mean <- ggplot(results, aes(x = Mean, fill = group)) + 
+  geom_density(alpha = 0.5, adjust = 1) + 
+  scale_fill_manual(values = c("original" = "#00CED1", "adapted" ="#4169E1")) +
+  theme_minimal() +
+  theme(legend.title = element_blank())+
+  guides(fill = "none")
+
+
+
+data<-read.xlsx('data.xlsx',sheet='item_ICC')
+df <- data.frame(score = data$score)
+
+df_reorganized <- df %>%
+  mutate(row_id = row_number(), 
+         group_id = (row_id - 1) %/% 4 + 1) %>% 
+  group_by(group_id) %>%
+  mutate(column_name = paste0("score", row_number())) %>% 
+  pivot_wider(id_cols = group_id, names_from = column_name, values_from = score)
+
+df_reorganized$question <- c('original 1','original 2','original 3','original 4','original 5','original 6','adapted 1','adapted 2','adapted 3','adapted 4','adapted 5','adapted 6','adapted 7','adapted 8','adapted 9','adapted 10','adapted 11','adapted 12','adapted 13','adapted 14','adapted 15','adapted 16','adapted 17','adapted 18')
+
+df_reorganized$group <- c('original','original','original','original','original','original','adapted','adapted','adapted','adapted','adapted','adapted','adapted','adapted','adapted','adapted','adapted','adapted','adapted','adapted','adapted','adapted','adapted','adapted')
+
+df_reorganized <- df_reorganized %>%
+  rowwise() %>%
+  mutate(min_score = min(c(score1, score2, score3, score4)),
+         max_score = max(c(score1, score2, score3, score4)))
+
+p <- ggplot(data = df_reorganized, aes(y = group_id)) +
+  geom_segment(aes(x = min_score, xend = max_score, yend = group_id, color = group), size = 1.2) + 
+  geom_point(aes(x = score1, color = group), size = 2) +  
+  geom_point(aes(x = score2, color = group), size = 2) +  
+  geom_point(aes(x = score3, color = group), size = 2) +  
+  geom_point(aes(x = score4, color = group), size = 2) +  
+  scale_color_manual(values = c("original" = "#00CED1", "adapted" = "#4169E1")) +  
+  scale_y_continuous(name = "Question ID", breaks = df_reorganized$group_id, labels = df_reorganized$question) +
+  scale_x_continuous(name = "Effectiveness", limits = c(1, 5)) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 0, vjust = 0.5, hjust=1),
+        legend.position = "right",
+        panel.grid.major = element_blank(),  
+        panel.grid.minor = element_blank()) 
+
+
+```
+
+```{r empirical_credamo}
+
+# internal consistency
+credamo <- read.xlsx('data.xlsx',sheet = 'credamo')
+
+omega(credamo[,c("c_s1","c_s2","c_a1","c_a2","c_f1","c_f2")]) # omega 0.41 alpha 0.17
+
+omega(credamo[,c("new_r2_s1","new_r1_s2","new_r1_a1","new_r1_a2","new_r1_f1","new_r2_f2")])# 0.47 0.28
+
+omega(credamo[,c("fang_r3_s1","fang_r1_s1","fang_r2_a2","fang_r3_a2","fang_r1_f1","fang_r3_f2")])#0.4  0.12
+
+
+# correlation
+cor_table <- round(cor(credamo[,c("original","new","adapted", "total_W","Extroversion","Openness","Agreeableness","Conscientiousness",	"Neuroticism","DASS")],use='complete.obs'),2)
+View(cor_table)
+
+
+cor_test <- rcorr(as.matrix(credamo[, c("original","new","adapted", "total_W","Extroversion","Openness","Agreeableness","Conscientiousness",	"Neuroticism","DASS")]), type="pearson")
+
+cor_matrix <- round(cor_test$r, 2)
+p_matrix <- cor_test$P
+add_significance_marks <- function(p) {
+  if(is.na(p)) {
+    return("")  # 如果p值是NA，返回空字符串
+  } else if(p < 0.001) {
+    return("***")
+  } else if(p < 0.01) {
+    return("**")
+  } else if(p < 0.05) {
+    return("*")
+  } else {
+    return("")
+  }
+}
+significance_marks <- matrix(sapply(p_matrix, add_significance_marks), nrow = dim(p_matrix)[1])
+
+
+
+data_long_cre <- credamo %>%
+  pivot_longer(cols = c("original","new","adapted"), 
+               names_to = "group", 
+               values_to = "value")
+
+p1 <- ggplot(data_long_cre, aes(x = value, fill = group)) + 
+  geom_density(alpha = 0.5, adjust = 1) +  
+  scale_fill_manual(values = c( "original" = "#00CED1","new" = "#EE82EE", "adapted" ="#4169E1")) +
+  theme_minimal() +
+  theme(legend.title = element_blank())+
+  labs(x = "Credamo Subjects")
+
+
+```
+
+```{r empirical_students}
+
+psy <- read.xlsx('data.xlsx',sheet='psy')
+
+# internal consistency
+omega(psy[,c("c_s1","c_s2","c_a1","c_a2","c_f1","c_f2")]) # omega 0.46 alpha 0.31
+
+omega(psy[,c("new_r2_s1","new_r1_s2","new_r1_a1","new_r1_a2","new_r1_f1","new_r2_f2")])# 0.51 0.20
+
+omega(psy[,c("fang_r3_s1","fang_r1_s1","fang_r2_a2","fang_r3_a2","fang_r1_f1","fang_r3_f2")]) #0.53  0.24
+
+
+# correlation
+cor_table <- round(cor(psy[,c("original","new","adapted", "WLEIS","Extroversion","Openness","Agreeableness","Conscientiousness","Neuroticism","DASS")], use = 'complete.obs'),2)
+
+
+cor_test <- rcorr(as.matrix(psy[,c("original","new","adapted", "WLEIS","Extroversion","Openness","Agreeableness","Conscientiousness","Neuroticism","DASS")]), type="pearson")
+
+cor_matrix <- round(cor_test$r, 2)
+p_matrix <- cor_test$P
+add_significance_marks <- function(p) {
+  if(is.na(p)) {
+    return("")  # 如果p值是NA，返回空字符串
+  } else if(p < 0.001) {
+    return("***")
+  } else if(p < 0.01) {
+    return("**")
+  } else if(p < 0.05) {
+    return("*")
+  } else {
+    return("")
+  }
+}
+significance_marks <- matrix(sapply(p_matrix, add_significance_marks), nrow = dim(p_matrix)[1])
+
+
+
+data_long_psy <- psy %>%
+  pivot_longer(cols = c("original","new","adapted"), 
+               names_to = "group", 
+               values_to = "value")
+
+p2 <- ggplot(data_long_psy, aes(x = value, fill = group)) + 
+  geom_density(alpha = 0.5, adjust = 1) +  # adjust 参数控制平滑程度
+  scale_fill_manual(values = c("original" = "#00CED1", "new" = "#EE82EE", "adapted" ="#4169E1")) +
+  theme_minimal() +
+  theme(legend.title = element_blank())+
+  labs(x = "Psychology Students")
+
+
+
+#-------mean total score------
+
+results <- psy %>%
+  group_by(major) %>%
+  summarise(
+    Mean_Original = round(mean(total_original, na.rm = TRUE),2),
+    #Max_Original = round(max(total_original, na.rm = TRUE),2),
+    #Min_Original = min(total_original, na.rm = TRUE),
+    SD_Original = sd(total_original, na.rm = TRUE),
+    Mean_New = mean(total_new, na.rm = TRUE),
+    #Max_New = max(total_new, na.rm = TRUE),
+    #Min_New = min(total_new, na.rm = TRUE),
+    SD_New = sd(total_new, na.rm = TRUE),
+    Mean_Adapted = mean(total_adapted, na.rm = TRUE),
+    #Max_Adapted = max(total_adapted, na.rm = TRUE),
+    #Min_Adapted = min(total_adapted, na.rm = TRUE),
+    SD_Adapted = sd(total_adapted, na.rm = TRUE)
+  )
+
+
+
+```
+
+```{r t-test}
+
+Credamo <- read.xlsx('data.xlsx',sheet = 'credamo')
+data_Cre <- Credamo[,c('original','new','adapted')]
+data_cre$group <- "Credamo"
+
+psy <- read.xlsx('data.xlsx',sheet='psy')
+data_psy <- psy[,c('original','new','adapted')]
+data_psy$group <- "Psy"
+
+combined_data <- rbind(data_cre, data_psy)
+t.test(combined_data$original ~ combined_data$group, data=combined_data)
+
+t.test(combined_data$new ~ combined_data$group, data=combined_data)
+
+t.test(combined_data$adapted ~ combined_data$group, data=combined_data)
+
+credamo_summary <- combined_data %>%
+  filter(group == "Credamo") %>%
+  summarise(
+    mean_original = mean(original, na.rm = TRUE),
+    sd_original = sd(original, na.rm = TRUE),
+    mean_new = mean(new, na.rm = TRUE),
+    sd_new = sd(new, na.rm = TRUE),
+    mean_adapted = mean(adapted, na.rm = TRUE),
+    sd_adapted = sd(adapted, na.rm = TRUE)
+  )
+
+psy_summary <- combined_data %>%
+  filter(group == "Psy") %>%
+  summarise(
+    mean_original = mean(original, na.rm = TRUE),
+    sd_original = sd(original, na.rm = TRUE),
+    mean_new = mean(new, na.rm = TRUE),
+    sd_new = sd(new, na.rm = TRUE),
+    mean_adapted = mean(adapted, na.rm = TRUE),
+    sd_adapted = sd(adapted, na.rm = TRUE)
+  )
+
+
+
+data_psy <- psy[,c('major','original','new','adapted')]
+
+t.test(data_psy$original ~ data_psy$new方向, data=data_psy)
+
+t.test(data_psy$new ~ data_psy$new方向, data=data_psy)
+
+t.test(data_psy$adapted ~ data_psy$new方向, data=data_psy)
+
+Counseling_summary <- data_psy %>%
+  filter(major == "Counseling") %>%
+  summarise(
+    mean_original = mean(original, na.rm = TRUE),
+    sd_original = sd(original, na.rm = TRUE),
+    mean_new = mean(new, na.rm = TRUE),
+    sd_new = sd(new, na.rm = TRUE),
+    mean_adapted = mean(adapted, na.rm = TRUE),
+    sd_adapted = sd(adapted, na.rm = TRUE)
+  )
+
+Noncounseling_summary <- data_psy %>%
+  filter(major == "NonCounseling") %>%
+  summarise(
+    mean_original = mean(original, na.rm = TRUE),
+    sd_original = sd(original, na.rm = TRUE),
+    mean_new = mean(new, na.rm = TRUE),
+    sd_new = sd(new, na.rm = TRUE),
+    mean_adapted = mean(adapted, na.rm = TRUE),
+    sd_adapted = sd(adapted, na.rm = TRUE)
+  )
+
+data_cre <- credamo[,c("c_s1","c_s2","c_a1","c_a2","c_f1","c_f2","new_r2_s1","new_r1_s2","new_r1_a1","new_r1_a2","new_r1_f1","new_r2_f2","fang_r3_s1","fang_r1_s1","fang_r2_a2","fang_r3_a2","fang_r1_f1","fang_r3_f2")]
+
+data_cre$group <- "Credamo Subjects"
+
+data_psy <- psy[,c("c_s1","c_s2","c_a1","c_a2","c_f1","c_f2","new_r2_s1","new_r1_s2","new_r1_a1","new_r1_a2","new_r1_f1","new_r2_f2","fang_r3_s1","fang_r1_s1","fang_r2_a2","fang_r3_a2","fang_r1_f1","fang_r3_f2")]
+
+data_psy$group <- "Psychology Students"
+
+combined_data <- rbind(data_cre, data_psy)
+
+age_group_means <- combined_data %>%
+     group_by(group) %>%
+     summarise(across(c("c_s1","c_s2","c_a1","c_a2","c_f1","c_f2","new_r2_s1","new_r1_s2","new_r1_a1","new_r1_a2","new_r1_f1","new_r2_f2","fang_r3_s1","fang_r1_s1","fang_r2_a2","fang_r3_a2","fang_r1_f1","fang_r3_f2"), mean, na.rm = TRUE))
+
+
+data_p1 <- age_group_means[, c("group", "c_s1","c_s2","c_a1","c_a2","c_f1","c_f2")]
+data_p1_long <- reshape2::melt(data_p1, id.vars = "group")
+
+p1 <- ggplot(data_p1_long, aes(x = variable, y = value, fill = group)) +
+      geom_bar(stat = "identity", position = position_dodge()) +
+      labs(title = "original items", y = "score", x = NULL) +
+      scale_x_discrete(labels = c("sad1", "sad2", "anger1", "anger2", "fear1", "fear2")) +
+  scale_fill_discrete(guide = "none") +  
+      theme_minimal() +
+      theme(
+        legend.title = element_blank(),
+        panel.grid = element_blank(),  
+        plot.title = element_text(hjust = 0.5),  
+        axis.text.x = element_text(size = 10), 
+        axis.text.y = element_text(size = 10),
+        axis.title.y = element_text(size = 12)
+      )
+
+
+
+data_p2 <- age_group_means[, c("group", "new_r2_s1", "new_r1_s2", "new_r1_a1", "new_r1_a2", "new_r1_f1", "new_r2_f2")]
+data_p2_long <- reshape2::melt(data_p2, id.vars = "group")
+
+p2 <- ggplot(data_p2_long, aes(x = variable, y = value, fill = group)) +
+      geom_bar(stat = "identity", position = position_dodge()) +
+      labs(title = "new items", y = "score", x = NULL) +
+      scale_x_discrete(labels = c("sad1", "sad2", "anger1", "anger2", "fear1", "fear2")) +
+  scale_fill_discrete(guide = "none") +  
+      theme_minimal() +
+      theme(
+        legend.title = element_blank(),
+        panel.grid = element_blank(),  
+        plot.title = element_text(hjust = 0.5), 
+        axis.text.x = element_text(size = 10), 
+        axis.text.y = element_text(size = 10),
+        axis.title.y = element_text(size = 12)
+      )
+
+
+data_p3 <- age_group_means[, c("group", "fang_r3_s1","fang_r1_s1","fang_r2_a2","fang_r3_a2","fang_r1_f1","fang_r3_f2")]
+data_p3_long <- reshape2::melt(data_p3, id.vars = "group")
+
+p3 <- ggplot(data_p3_long, aes(x = variable, y = value, fill = group)) +
+  geom_bar(stat = "identity", position = position_dodge()) +
+  labs(title = "adapted items", y = "score", x = NULL) + 
+  scale_x_discrete(labels = c("sad1", "sad2", "anger1", "anger2", "fear1", "fear2")) +
+  scale_fill_discrete(guide = "none") + 
+  theme_minimal() +
+  theme(
+    legend.title = element_blank(),
+    panel.grid = element_blank(),  
+    plot.title = element_text(hjust = 0.5), 
+    axis.text.x = element_text(size = 10), 
+    axis.text.y = element_text(size = 10),
+    axis.title.y = element_text(size = 12)
+  )
+
+
+
+```
+
