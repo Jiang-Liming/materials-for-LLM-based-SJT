@@ -139,8 +139,7 @@ psych::ICC(data[,c("expert1","expert2","expert3","expert4","expert5","expert6","
 
 ```
 
-
-```{r options}
+```{r new options}
 
 optiondata<-read.xlsx('data.xlsx',sheet='opt_ICC')
 
@@ -294,94 +293,60 @@ psych::ICC(data[,c("expert1","expert2","expert3","expert4","expert5","expert6","
 
 data$question <- (seq_len(nrow(data)) - 1) %/% 4 + 1
 
-results <- data %>%
-  group_by(question) %>%
-  summarise(
-    Max = round(max(score, na.rm = TRUE),2),
-    Min = round(min(score, na.rm = TRUE),2),
-    Mean = round(mean(score, na.rm = TRUE),2),
-    SD = round(sd(score, na.rm = TRUE),2)
+original_data <- data %>%
+  filter(group == "original")
+
+original_plot <- ggplot(original_data, aes(x = score, fill = factor(expert))) +
+  geom_density(alpha = 0.5) +  # 设置透明度为0.5
+  scale_fill_manual(
+    values = c("0" = "#FFF7E6","1" = "#FFB84D","2" = "#FF8000"),
+    name = "",
+    labels = c("ineffective", "moderately effective", "effective")
+  ) +
+  scale_x_continuous(breaks = 1:5, limits = c(1, 5)) + 
+  theme_minimal() +
+  labs(
+    title = "original options",
+    x = "effectiveness rated by experts",
+    y = "density"
+  ) +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 14),
+    axis.title = element_text(size = 12),
+    legend.title = element_text(size = 12),
+    legend.text = element_text(size = 10)
   )
 
-results$question <- c('original 1','original 2','original 3','original 4','original 5','original 6','adapted 1','adapted 2','adapted 3','adapted 4','adapted 5','adapted 6','adapted 7','adapted 8','adapted 9','adapted 10','adapted 11','adapted 12','adapted 13','adapted 14','adapted 15','adapted 16','adapted 17','adapted 18')
+adapted_data <- data %>%
+  filter(group == "adapted")
 
-results$group <- c('original','original','original','original','original','original','adapted','adapted','adapted','adapted','adapted','adapted','adapted','adapted','adapted','adapted','adapted','adapted','adapted','adapted','adapted','adapted','adapted','adapted')
-
-View(results)
-
-#SD
-p_sd <- ggplot(results, aes(x = SD, fill = group)) + 
-  geom_density(alpha = 0.5, adjust = 1) + 
-  scale_fill_manual(values = c("original" = "#00CED1", "adapted" ="#4169E1")) +
+adapted_plot <- ggplot(adapted_data, aes(x = score, fill = factor(expert))) +
+  geom_density(alpha = 0.5) +  # 设置透明度为0.5
+  scale_fill_manual(
+    values = c("0" = "#FFF7E6","1" = "#FFB84D","2" = "#FF8000"),
+    #values = c("0" = "#E8FDF9", "1" = "#B4FCEC", "2" = "#009B9E"),
+    name = "",
+    labels = c("ineffective", "moderately effective", "effective")
+  ) +
   theme_minimal() +
-  theme(legend.title = element_blank())+
-  guides(fill = "none")
+  labs(
+    title = "adapted options",
+    x = "effectiveness rated by experts",
+    y = "density"
+  ) +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 14),
+    axis.title = element_text(size = 12),
+    legend.title = element_text(size = 12),
+    legend.text = element_text(size = 10)
+  )
 
-
-#min
-p_min <- ggplot(results, aes(x = Min, fill = group)) + 
-  geom_density(alpha = 0.5, adjust = 1) + 
-  scale_fill_manual(values = c("original" = "#00CED1", "adapted" ="#4169E1")) +
-  theme_minimal() +
-  theme(legend.title = element_blank())+
-  guides(fill = "none")
-
-#max
-p_max <-ggplot(results, aes(x = Max, fill = group)) + 
-  geom_density(alpha = 0.5, adjust = 1) + 
-  scale_fill_manual(values = c("original" = "#00CED1", "adapted" ="#4169E1")) +
-  theme_minimal() +
-  theme(legend.title = element_blank())+
-  guides(fill = "none")
-
-#mean
-p_mean <- ggplot(results, aes(x = Mean, fill = group)) + 
-  geom_density(alpha = 0.5, adjust = 1) + 
-  scale_fill_manual(values = c("original" = "#00CED1", "adapted" ="#4169E1")) +
-  theme_minimal() +
-  theme(legend.title = element_blank())+
-  guides(fill = "none")
-
-
-
-data<-read.xlsx('data.xlsx',sheet='item_ICC')
-df <- data.frame(score = data$score)
-
-df_reorganized <- df %>%
-  mutate(row_id = row_number(), 
-         group_id = (row_id - 1) %/% 4 + 1) %>% 
-  group_by(group_id) %>%
-  mutate(column_name = paste0("score", row_number())) %>% 
-  pivot_wider(id_cols = group_id, names_from = column_name, values_from = score)
-
-df_reorganized$question <- c('original 1','original 2','original 3','original 4','original 5','original 6','adapted 1','adapted 2','adapted 3','adapted 4','adapted 5','adapted 6','adapted 7','adapted 8','adapted 9','adapted 10','adapted 11','adapted 12','adapted 13','adapted 14','adapted 15','adapted 16','adapted 17','adapted 18')
-
-df_reorganized$group <- c('original','original','original','original','original','original','adapted','adapted','adapted','adapted','adapted','adapted','adapted','adapted','adapted','adapted','adapted','adapted','adapted','adapted','adapted','adapted','adapted','adapted')
-
-df_reorganized <- df_reorganized %>%
-  rowwise() %>%
-  mutate(min_score = min(c(score1, score2, score3, score4)),
-         max_score = max(c(score1, score2, score3, score4)))
-
-p <- ggplot(data = df_reorganized, aes(y = group_id)) +
-  geom_segment(aes(x = min_score, xend = max_score, yend = group_id, color = group), size = 1.2) + 
-  geom_point(aes(x = score1, color = group), size = 2) +  
-  geom_point(aes(x = score2, color = group), size = 2) +  
-  geom_point(aes(x = score3, color = group), size = 2) +  
-  geom_point(aes(x = score4, color = group), size = 2) +  
-  scale_color_manual(values = c("original" = "#00CED1", "adapted" = "#4169E1")) +  
-  scale_y_continuous(name = "Question ID", breaks = df_reorganized$group_id, labels = df_reorganized$question) +
-  scale_x_continuous(name = "Effectiveness", limits = c(1, 5)) +
-  theme_minimal() +
-  theme(axis.text.x = element_text(angle = 0, vjust = 0.5, hjust=1),
-        legend.position = "right",
-        panel.grid.major = element_blank(),  
-        panel.grid.minor = element_blank()) 
+grid.arrange(original_plot,adapted_plot,original_plot,adapted_plot,ncol=2)
 
 
 ```
 
-```{r empirical_credamo}
+```{r empirical_credamo_participants}
 
 # internal consistency
 credamo <- read.xlsx('data.xlsx',sheet = 'credamo')
@@ -434,7 +399,7 @@ p1 <- ggplot(data_long_cre, aes(x = value, fill = group)) +
 
 ```
 
-```{r empirical_students}
+```{r empirical_psy_students}
 
 psy <- read.xlsx('data.xlsx',sheet='psy')
 
