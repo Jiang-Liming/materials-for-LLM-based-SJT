@@ -359,11 +359,10 @@ omega(credamo[,c("fang_r3_s1","fang_r1_s1","fang_r2_a2","fang_r3_a2","fang_r1_f1
 
 
 # correlation
-cor_table <- round(cor(credamo[,c("original","new","adapted", "total_W","Extroversion","Openness","Agreeableness","Conscientiousness",	"Neuroticism","DASS")],use='complete.obs'),2)
+cor_credamo <- round(cor(credamo[,c("original","new","adapted", "WLEIS","Extroversion","Openness","Agreeableness","Conscientiousness",	"Neuroticism","DASS")],use='complete.obs'),2)
 View(cor_table)
 
-
-cor_test <- rcorr(as.matrix(credamo[, c("original","new","adapted", "total_W","Extroversion","Openness","Agreeableness","Conscientiousness",	"Neuroticism","DASS")]), type="pearson")
+cor_test_credamo <- rcorr(as.matrix(credamo[, c("original","new","adapted", "WLEIS","Extroversion","Openness","Agreeableness","Conscientiousness",	"Neuroticism","DASS")]), type="pearson")
 
 cor_matrix <- round(cor_test$r, 2)
 p_matrix <- cor_test$P
@@ -381,7 +380,6 @@ add_significance_marks <- function(p) {
   }
 }
 significance_marks <- matrix(sapply(p_matrix, add_significance_marks), nrow = dim(p_matrix)[1])
-
 
 
 data_long_cre <- credamo %>%
@@ -412,16 +410,15 @@ omega(psy[,c("fang_r3_s1","fang_r1_s1","fang_r2_a2","fang_r3_a2","fang_r1_f1","f
 
 
 # correlation
-cor_table <- round(cor(psy[,c("original","new","adapted", "WLEIS","Extroversion","Openness","Agreeableness","Conscientiousness","Neuroticism","DASS")], use = 'complete.obs'),2)
+cor_psy <- round(cor(psy[,c("original","new","adapted", "WLEIS","Extroversion","Openness","Agreeableness","Conscientiousness","Neuroticism","DASS")], use = 'complete.obs'),2)
 
-
-cor_test <- rcorr(as.matrix(psy[,c("original","new","adapted", "WLEIS","Extroversion","Openness","Agreeableness","Conscientiousness","Neuroticism","DASS")]), type="pearson")
+cor_test_psy <- rcorr(as.matrix(psy[,c("original","new","adapted", "WLEIS","Extroversion","Openness","Agreeableness","Conscientiousness","Neuroticism","DASS")]), type="pearson")
 
 cor_matrix <- round(cor_test$r, 2)
 p_matrix <- cor_test$P
 add_significance_marks <- function(p) {
   if(is.na(p)) {
-    return("")  # 如果p值是NA，返回空字符串
+    return("")  
   } else if(p < 0.001) {
     return("***")
   } else if(p < 0.01) {
@@ -435,6 +432,59 @@ add_significance_marks <- function(p) {
 significance_marks <- matrix(sapply(p_matrix, add_significance_marks), nrow = dim(p_matrix)[1])
 
 
+# Fisher' z test: the significance of each pair of correlations
+
+compare_correlations <- function(r1, r2, n1, n2, alpha = 0.05) {
+  z1 <- 0.5 * log((1 + r1)/(1 - r1))
+  z2 <- 0.5 * log((1 + r2)/(1 - r2))
+  SE <- sqrt(1/(n1-3) + 1/(n2-3))
+  z_stat <- (z1 - z2)/SE
+  p_value <- 2 * (1 - pnorm(abs(z_stat)))
+  is_significant <- p_value < alpha
+  
+  result_str <- sprintf("Z = %.2f (p = %.3f)%s", 
+                       z_stat, 
+                       p_value,
+                       ifelse(p_value < 0.001, "***",
+                             ifelse(p_value < 0.01, "**",
+                                   ifelse(p_value < 0.05, "*", ""))))
+  
+  return(list(
+    z_stat = z_stat,
+    p_value = p_value,
+    is_significant = is_significant,
+    formatted = result_str
+  ))
+}
+
+compare_correlation_matrices <- function(cor1, cor2, n1, n2) {
+  if(!all(dim(cor1) == dim(cor2))) {
+    stop("Dimension not match")
+  }
+  
+  nvar <- ncol(cor1)
+  result_matrix <- matrix("", nvar, nvar) 
+  
+  rownames(result_matrix) <- colnames(cor1)
+  colnames(result_matrix) <- colnames(cor1)
+  
+  for(i in 1:(nvar-1)) {
+    for(j in (i+1):nvar) {
+      result <- compare_correlations(cor1[i,j], cor2[i,j], n1, n2)
+      result_matrix[i,j] <- result_matrix[j,i] <- result$formatted
+    }
+  }
+  
+  diag(result_matrix) <- NA
+  
+  return(result_matrix)
+}
+
+n1 <- 93
+n2 <- 184
+results <- compare_correlation_matrices(cor_psy, cor_credamo, n1, n2)
+print(results)
+
 
 data_long_psy <- psy %>%
   pivot_longer(cols = c("original","new","adapted"), 
@@ -442,7 +492,7 @@ data_long_psy <- psy %>%
                values_to = "value")
 
 p2 <- ggplot(data_long_psy, aes(x = value, fill = group)) + 
-  geom_density(alpha = 0.5, adjust = 1) +  # adjust 参数控制平滑程度
+  geom_density(alpha = 0.5, adjust = 1) +  
   scale_fill_manual(values = c("original" = "#00CED1", "new" = "#EE82EE", "adapted" ="#4169E1")) +
   theme_minimal() +
   theme(legend.title = element_blank())+
@@ -475,8 +525,8 @@ results <- psy %>%
 
 ```{r t-test}
 
-Credamo <- read.xlsx('data.xlsx',sheet = 'credamo')
-data_Cre <- Credamo[,c('original','new','adapted')]
+credamo <- read.xlsx('data.xlsx',sheet = 'credamo')
+data_cre <- Credamo[,c('original','new','adapted')]
 data_cre$group <- "Credamo"
 
 psy <- read.xlsx('data.xlsx',sheet='psy')
@@ -516,11 +566,9 @@ psy_summary <- combined_data %>%
 
 data_psy <- psy[,c('major','original','new','adapted')]
 
-t.test(data_psy$original ~ data_psy$new方向, data=data_psy)
-
-t.test(data_psy$new ~ data_psy$new方向, data=data_psy)
-
-t.test(data_psy$adapted ~ data_psy$new方向, data=data_psy)
+t.test(data_psy$original ~ data_psy$major, data=data_psy)
+t.test(data_psy$new ~ data_psy$major, data=data_psy)
+t.test(data_psy$adapted ~ data_psy$major, data=data_psy)
 
 Counseling_summary <- data_psy %>%
   filter(major == "Counseling") %>%
