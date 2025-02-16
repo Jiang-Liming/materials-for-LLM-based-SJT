@@ -301,7 +301,7 @@ original_plot <- ggplot(original_data, aes(x = score, fill = factor(expert))) +
   scale_fill_manual(
     values = c("0" = "#FFF7E6","1" = "#FFB84D","2" = "#FF8000"),
     name = "",
-    labels = c("ineffective", "moderately effective", "effective")
+    labels = c("ineffective", "moderately effective", "highly effective")
   ) +
   scale_x_continuous(breaks = 1:5, limits = c(1, 5)) + 
   theme_minimal() +
@@ -321,12 +321,12 @@ adapted_data <- data %>%
   filter(group == "adapted")
 
 adapted_plot <- ggplot(adapted_data, aes(x = score, fill = factor(expert))) +
-  geom_density(alpha = 0.5) +  # 设置透明度为0.5
+  geom_density(alpha = 0.5) +  
   scale_fill_manual(
     values = c("0" = "#FFF7E6","1" = "#FFB84D","2" = "#FF8000"),
     #values = c("0" = "#E8FDF9", "1" = "#B4FCEC", "2" = "#009B9E"),
     name = "",
-    labels = c("ineffective", "moderately effective", "effective")
+    labels = c("ineffective", "moderately effective", "highly effective")
   ) +
   theme_minimal() +
   labs(
@@ -368,7 +368,7 @@ cor_matrix <- round(cor_test$r, 2)
 p_matrix <- cor_test$P
 add_significance_marks <- function(p) {
   if(is.na(p)) {
-    return("")  # 如果p值是NA，返回空字符串
+    return("")  
   } else if(p < 0.001) {
     return("***")
   } else if(p < 0.01) {
@@ -430,74 +430,6 @@ add_significance_marks <- function(p) {
   }
 }
 significance_marks <- matrix(sapply(p_matrix, add_significance_marks), nrow = dim(p_matrix)[1])
-
-
-# Fisher' z test: the significance of each pair of correlations
-
-compare_correlations <- function(r1, r2, n1, n2, alpha = 0.05) {
-  z1 <- 0.5 * log((1 + r1)/(1 - r1))
-  z2 <- 0.5 * log((1 + r2)/(1 - r2))
-  SE <- sqrt(1/(n1-3) + 1/(n2-3))
-  z_stat <- (z1 - z2)/SE
-  p_value <- 2 * (1 - pnorm(abs(z_stat)))
-  is_significant <- p_value < alpha
-  
-  result_str <- sprintf("Z = %.2f (p = %.3f)%s", 
-                       z_stat, 
-                       p_value,
-                       ifelse(p_value < 0.001, "***",
-                             ifelse(p_value < 0.01, "**",
-                                   ifelse(p_value < 0.05, "*", ""))))
-  
-  return(list(
-    z_stat = z_stat,
-    p_value = p_value,
-    is_significant = is_significant,
-    formatted = result_str
-  ))
-}
-
-compare_correlation_matrices <- function(cor1, cor2, n1, n2) {
-  if(!all(dim(cor1) == dim(cor2))) {
-    stop("Dimension not match")
-  }
-  
-  nvar <- ncol(cor1)
-  result_matrix <- matrix("", nvar, nvar) 
-  
-  rownames(result_matrix) <- colnames(cor1)
-  colnames(result_matrix) <- colnames(cor1)
-  
-  for(i in 1:(nvar-1)) {
-    for(j in (i+1):nvar) {
-      result <- compare_correlations(cor1[i,j], cor2[i,j], n1, n2)
-      result_matrix[i,j] <- result_matrix[j,i] <- result$formatted
-    }
-  }
-  
-  diag(result_matrix) <- NA
-  
-  return(result_matrix)
-}
-
-n1 <- 93
-n2 <- 184
-results <- compare_correlation_matrices(cor_psy, cor_credamo, n1, n2)
-print(results)
-
-
-data_long_psy <- psy %>%
-  pivot_longer(cols = c("original","new","adapted"), 
-               names_to = "group", 
-               values_to = "value")
-
-p2 <- ggplot(data_long_psy, aes(x = value, fill = group)) + 
-  geom_density(alpha = 0.5, adjust = 1) +  
-  scale_fill_manual(values = c("original" = "#00CED1", "new" = "#EE82EE", "adapted" ="#4169E1")) +
-  theme_minimal() +
-  theme(legend.title = element_blank())+
-  labs(x = "Psychology Students")
-
 
 
 #-------mean total score------
